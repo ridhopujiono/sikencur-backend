@@ -16,10 +16,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            CategorySeeder::class,
-        ]);
-
         User::query()->firstOrCreate([
             'email' => 'test@example.com',
         ], [

@@ -35,6 +35,11 @@ class User extends Authenticatable
         return $this->hasMany(ReceiptScan::class);
     }
 
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(UserBudget::class);
+    }
+
     protected function casts(): array
     {
         return [
