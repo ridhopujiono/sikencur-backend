@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,6 +39,11 @@ class User extends Authenticatable
     public function budgets(): HasMany
     {
         return $this->hasMany(UserBudget::class);
+    }
+
+    public function dssProfile(): HasOne
+    {
+        return $this->hasOne(DssProfile::class);
     }
 
     protected function casts(): array

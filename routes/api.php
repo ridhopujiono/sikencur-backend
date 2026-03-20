@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DssController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserBudgetController;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,8 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/dss/profile', [DssController::class, 'profile']);
+    Route::post('/dss/analyze', [DssController::class, 'analyze']);
     Route::get('/user-budgets', [UserBudgetController::class, 'show']);
     Route::put('/user-budgets', [UserBudgetController::class, 'upsert']);
     Route::post('/scan-receipt', [TransactionController::class, 'scanReceipt']);
