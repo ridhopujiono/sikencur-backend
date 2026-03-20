@@ -18,6 +18,16 @@ use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
+    private const INCOME_CATEGORIES = [
+        'Gaji',
+        'Bonus & THR',
+        'Penghasilan Freelance',
+        'Penghasilan Usaha',
+        'Pendapatan Investasi',
+        'Penghasilan Lain',
+        'Refund/Pengembalian Dana',
+    ];
+
     public function index(ListTransactionsRequest $request): JsonResponse
     {
         $query = Transaction::query()
@@ -53,6 +63,30 @@ class TransactionController extends Controller
             });
         }
 
+        $query->when($request->transaction_type, function (Builder $builder, string $transactionType): void {
+            $normalizedType = strtolower(trim($transactionType));
+
+            if (! in_array($normalizedType, ['income', 'expense'], true)) {
+                return;
+            }
+
+            $incomeCategories = $this->incomeCategoriesLower();
+
+            $builder->whereHas('items', function (Builder $itemQuery) use ($normalizedType, $incomeCategories): void {
+                if ($normalizedType === 'income') {
+                    $itemQuery->whereIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $incomeCategories);
+
+                    return;
+                }
+
+                $itemQuery->where(function (Builder $expenseQuery) use ($incomeCategories): void {
+                    $expenseQuery
+                        ->whereNull('transaction_items.category')
+                        ->orWhereNotIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $incomeCategories);
+                });
+            });
+        });
+
         if ($request->filled('min_total')) {
             $query->where('price_total', '>=', $request->input('min_total'));
         }
@@ -68,7 +102,7 @@ class TransactionController extends Controller
                 $request->string('sort_by', 'transaction_date')->toString(),
                 $request->string('sort_direction', 'desc')->toString()
             )
-            ->paginate((int) $request->input('per_page', 15))
+            ->paginate((int) $request->input('per_page', 100))
             ->appends($request->query());
 
         return response()->json($transactions);
@@ -86,15 +120,8 @@ class TransactionController extends Controller
         $previousPeriodEnd = $periodStart->copy()->subMonth()->endOfMonth();
         $periodEndForDaily = now()->lt($periodEnd) ? now() : $periodEnd->copy()->endOfDay();
 
-        $currentMonthTotal = (float) Transaction::query()
-            ->where('user_id', $userId)
-            ->whereBetween('transaction_date', [$periodStart, $periodEnd])
-            ->sum('price_total');
-
-        $previousMonthTotal = (float) Transaction::query()
-            ->where('user_id', $userId)
-            ->whereBetween('transaction_date', [$previousPeriodStart, $previousPeriodEnd])
-            ->sum('price_total');
+        $currentMonthTotal = $this->calculateExpenseTotal($userId, $periodStart, $periodEnd);
+        $previousMonthTotal = $this->calculateExpenseTotal($userId, $previousPeriodStart, $previousPeriodEnd);
 
         $monthlyTransactionCount = (int) Transaction::query()
             ->where('user_id', $userId)
@@ -314,12 +341,19 @@ class TransactionController extends Controller
         $dailyEnd = $periodEndForDaily->copy()->endOfDay();
         $dailyStart = $dailyEnd->copy()->subDays(6)->startOfDay();
         $dayLabels = [0 => 'Min', 1 => 'Sen', 2 => 'Sel', 3 => 'Rab', 4 => 'Kam', 5 => 'Jum', 6 => 'Sab'];
+        $excludedCategories = $this->incomeCategoriesLower();
 
-        $totalsByDate = Transaction::query()
-            ->selectRaw('DATE(transaction_date) as tx_date, SUM(price_total) as total')
-            ->where('user_id', $userId)
-            ->whereBetween('transaction_date', [$dailyStart, $dailyEnd])
-            ->groupBy(DB::raw('DATE(transaction_date)'))
+        $totalsByDate = TransactionItem::query()
+            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
+            ->selectRaw('DATE(transactions.transaction_date) as tx_date, SUM(transaction_items.price) as total')
+            ->where('transactions.user_id', $userId)
+            ->whereBetween('transactions.transaction_date', [$dailyStart, $dailyEnd])
+            ->where(function ($builder) use ($excludedCategories): void {
+                $builder
+                    ->whereNull('transaction_items.category')
+                    ->orWhereNotIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $excludedCategories);
+            })
+            ->groupBy(DB::raw('DATE(transactions.transaction_date)'))
             ->pluck('total', 'tx_date');
 
         $result = [];
@@ -366,6 +400,30 @@ class TransactionController extends Controller
                 'percentage' => $baseTotal > 0 ? round(($total / $baseTotal) * 100, 2) : 0.0,
             ];
         })->values()->all();
+    }
+
+    private function calculateExpenseTotal(string $userId, Carbon $periodStart, Carbon $periodEnd): float
+    {
+        $excludedCategories = $this->incomeCategoriesLower();
+
+        return (float) TransactionItem::query()
+            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
+            ->where('transactions.user_id', $userId)
+            ->whereBetween('transactions.transaction_date', [$periodStart, $periodEnd])
+            ->where(function (Builder $builder) use ($excludedCategories): void {
+                $builder
+                    ->whereNull('transaction_items.category')
+                    ->orWhereNotIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $excludedCategories);
+            })
+            ->sum('transaction_items.price');
+    }
+
+    private function incomeCategoriesLower(): array
+    {
+        return array_map(
+            static fn (string $category): string => strtolower($category),
+            self::INCOME_CATEGORIES
+        );
     }
 
     private function formatMonthYear(int $month, int $year): string

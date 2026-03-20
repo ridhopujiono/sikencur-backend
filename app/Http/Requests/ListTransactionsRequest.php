@@ -18,6 +18,7 @@ class ListTransactionsRequest extends FormRequest
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'category' => ['nullable', 'string'],
+            'transaction_type' => ['nullable', 'string'],
             'merchant_name' => ['nullable', 'string'],
             'input_method' => ['nullable', 'string'],
             'search' => ['nullable', 'string'],

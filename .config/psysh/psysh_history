@@ -1,0 +1,20 @@
+\App\Models\Transaction::query()->whereHas('user', fn($q) => $q->where('email', 'test2@example.com'))->whereBetween('transaction_date', ['2026-03-01 00:00:00', '2026-03-31 23:59:59'])->count();
+exit
+use App\Models\Transaction;
+Transaction::all();
+use App\Models\TransactionItem;
+TransactionItem::all();
+TransactionItem::whereIn('category', ['Gaji',
+            'Bonus & THR',
+            'Penghasilan Freelance',
+            'Penghasilan Usaha',
+            'Pendapatan Investasi',
+            'Penghasilan Lain',
+            'Refund/Pengembalian Dana']);
+TransactionItem::whereIn('category', ['Gaji',
+            'Bonus & THR',
+            'Penghasilan Freelance',
+            'Penghasilan Usaha',
+            'Pendapatan Investasi',
+            'Penghasilan Lain',
+            'Refund/Pengembalian Dana'])->get();
