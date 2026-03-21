@@ -7,6 +7,7 @@ use App\Http\Requests\ScanReceiptRequest;
 use App\Http\Requests\StoreTransactionRequest;
 use App\Http\Requests\TotalTransactionsRequest;
 use App\Http\Requests\TransactionSummaryRequest;
+use App\Http\Requests\UpdateTransactionRequest;
 use App\Jobs\ProcessReceiptScan;
 use App\Models\ReceiptScan;
 use App\Models\Transaction;
@@ -284,6 +285,51 @@ class TransactionController extends Controller
         });
 
         return response()->json($transaction, 201);
+    }
+
+    public function update(string $transaction_id, UpdateTransactionRequest $request): JsonResponse
+    {
+        $transaction = Transaction::query()
+            ->where('id', $transaction_id)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        $transaction = DB::transaction(function () use ($transaction, $request): Transaction {
+            $updatableFields = [
+                'merchant_name',
+                'description',
+                'price_total',
+                'tax',
+                'service_charge',
+                'transaction_date',
+                'input_method',
+            ];
+
+            $attributes = [];
+
+            foreach ($updatableFields as $field) {
+                if ($request->exists($field)) {
+                    $attributes[$field] = $request->input($field);
+                }
+            }
+
+            if ($attributes !== []) {
+                $transaction->fill($attributes);
+                $transaction->save();
+            }
+
+            if ($request->has('items')) {
+                $transaction->items()->delete();
+
+                foreach ($request->validated('items') as $item) {
+                    $transaction->items()->create($item);
+                }
+            }
+
+            return $transaction->load('items');
+        });
+
+        return response()->json($transaction);
     }
 
     public function show(string $transaction_id): JsonResponse

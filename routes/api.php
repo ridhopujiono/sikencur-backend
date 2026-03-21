@@ -22,4 +22,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/transactions/summary', [TransactionController::class, 'summary']);
     Route::get('/transactions/{transaction_id}', [TransactionController::class, 'show']);
     Route::post('/transactions', [TransactionController::class, 'store']);
+    Route::put('/transactions/{transaction_id}', [TransactionController::class, 'update']);
+    Route::patch('/transactions/{transaction_id}', [TransactionController::class, 'update']);
 });
