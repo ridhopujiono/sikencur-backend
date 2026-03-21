@@ -18,6 +18,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/scan-receipt', [TransactionController::class, 'scanReceipt']);
     Route::get('/scan-receipt/{scan_id}', [TransactionController::class, 'checkStatus']);
     Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::get('/transactions/total', [TransactionController::class, 'total']);
     Route::get('/transactions/summary', [TransactionController::class, 'summary']);
     Route::get('/transactions/{transaction_id}', [TransactionController::class, 'show']);
     Route::post('/transactions', [TransactionController::class, 'store']);

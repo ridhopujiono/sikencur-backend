@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ListTransactionsRequest;
 use App\Http\Requests\ScanReceiptRequest;
 use App\Http\Requests\StoreTransactionRequest;
+use App\Http\Requests\TotalTransactionsRequest;
 use App\Http\Requests\TransactionSummaryRequest;
 use App\Jobs\ProcessReceiptScan;
 use App\Models\ReceiptScan;
@@ -182,6 +183,50 @@ class TransactionController extends Controller
             'seven_day_expense' => $dailySpending,
             'top_categories' => $topCategories,
             'largest_category' => $topCategories[0] ?? null,
+        ]);
+    }
+
+    public function total(TotalTransactionsRequest $request): JsonResponse
+    {
+        $query = TransactionItem::query()
+            ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
+            ->where('transactions.user_id', auth()->id());
+
+        if ($request->filled('date_from')) {
+            $query->where('transactions.transaction_date', '>=', $request->string('date_from')->toString().' 00:00:00');
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('transactions.transaction_date', '<=', $request->string('date_to')->toString().' 23:59:59');
+        }
+
+        if ($request->filled('category')) {
+            $query->where('transaction_items.category', $request->string('category')->toString());
+        }
+
+        if ($request->filled('input_method')) {
+            $query->where('transactions.input_method', $request->string('input_method')->toString());
+        }
+
+        $query->when($request->transaction_type, function (Builder $builder, string $transactionType): void {
+            $normalizedType = strtolower(trim($transactionType));
+            $incomeCategories = $this->incomeCategoriesLower();
+
+            if ($normalizedType === 'income') {
+                $builder->whereIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $incomeCategories);
+
+                return;
+            }
+
+            $builder->where(function (Builder $expenseQuery) use ($incomeCategories): void {
+                $expenseQuery
+                    ->whereNull('transaction_items.category')
+                    ->orWhereNotIn(DB::raw('TRIM(LOWER(transaction_items.category))'), $incomeCategories);
+            });
+        });
+
+        return response()->json([
+            'total' => round((float) $query->sum('transaction_items.price'), 2),
         ]);
     }
 
