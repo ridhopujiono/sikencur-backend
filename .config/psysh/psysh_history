@@ -18,3 +18,7 @@ TransactionItem::whereIn('category', ['Gaji',
             'Pendapatan Investasi',
             'Penghasilan Lain',
             'Refund/Pengembalian Dana'])->get();
+use Illmuninate\Support\Facades\DB;
+use App\Models\UserDevice;
+UserDevice::all();
+exit

@@ -46,6 +46,16 @@ class User extends Authenticatable
         return $this->hasOne(DssProfile::class);
     }
 
+    public function notificationPreference(): HasOne
+    {
+        return $this->hasOne(UserNotificationPreference::class);
+    }
+
+    public function devices(): HasMany
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
     protected function casts(): array
     {
         return [

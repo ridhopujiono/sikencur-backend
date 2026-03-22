@@ -39,4 +39,11 @@ return [
         'url' => env('OPENCLAW_URL'),
     ],
 
+    'firebase' => [
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'credentials' => env('FIREBASE_CREDENTIALS', storage_path('app/firebase/service-account.json')),
+        'credentials_json' => env('FIREBASE_CREDENTIALS_JSON'),
+        'credentials_base64' => env('FIREBASE_CREDENTIALS_BASE64'),
+    ],
+
 ];
