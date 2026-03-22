@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\DB;
 
 class SendWeeklyDssSummaryCommand extends Command
 {
-    protected $signature = 'notifications:dss-weekly';
+    protected $signature = 'notifications:dss-weekly {--force}';
 
     protected $description = 'Send weekly DSS summary and DSS tips notifications.';
 
     public function handle(FirebasePushService $pushService): int
     {
         $now = now();
+        $force = (bool) $this->option('force');
         $weekKey = $now->format('o-\WW');
         $periodEnd = $now->copy()->endOfDay();
         $periodStart = $now->copy()->subDays(6)->startOfDay();
@@ -38,7 +39,7 @@ class SendWeeklyDssSummaryCommand extends Command
 
             $summaryCacheKey = sprintf('weekly-summary:%s:%s', $user->id, $weekKey);
 
-            if (! Cache::has($summaryCacheKey)) {
+            if ($force || ! Cache::has($summaryCacheKey)) {
                 $weeklyExpense = $this->calculateExpense((string) $user->id, $periodStart, $periodEnd);
 
                 $summaryResult = $pushService->sendToUser(
@@ -65,7 +66,7 @@ class SendWeeklyDssSummaryCommand extends Command
 
             $tipCacheKey = sprintf('weekly-dss-tip:%s:%s', $user->id, $weekKey);
 
-            if (Cache::has($tipCacheKey)) {
+            if (! $force && Cache::has($tipCacheKey)) {
                 continue;
             }
 

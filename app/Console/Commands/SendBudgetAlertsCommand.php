@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class SendBudgetAlertsCommand extends Command
 {
-    protected $signature = 'notifications:budget-alerts {--month=} {--year=}';
+    protected $signature = 'notifications:budget-alerts {--month=} {--year=} {--force} {--debug}';
 
     protected $description = 'Send budget threshold alerts (80%, 100%, 120%) to users.';
 
@@ -20,6 +20,8 @@ class SendBudgetAlertsCommand extends Command
     {
         $month = (int) ($this->option('month') ?: now()->month);
         $year = (int) ($this->option('year') ?: now()->year);
+        $force = (bool) $this->option('force');
+        $debug = (bool) $this->option('debug');
         $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
         $periodEnd = $periodStart->copy()->endOfMonth();
 
@@ -30,11 +32,27 @@ class SendBudgetAlertsCommand extends Command
             ->get();
 
         $sentCount = 0;
+        $reasonCounters = [
+            'sent' => 0,
+            'no_user_or_limit' => 0,
+            'no_threshold' => 0,
+            'cache_hit' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+        ];
 
         foreach ($budgets as $budget) {
             $user = $budget->user;
 
             if ($user === null || (float) $budget->limit <= 0.0) {
+                $reasonCounters['no_user_or_limit']++;
+                if ($debug) {
+                    $this->line(sprintf(
+                        '[SKIP] user=%s reason=no_user_or_limit limit=%s',
+                        $user?->email ?? 'unknown',
+                        (string) $budget->limit
+                    ));
+                }
                 continue;
             }
 
@@ -43,12 +61,28 @@ class SendBudgetAlertsCommand extends Command
             $threshold = $this->resolveThreshold($usedPercent);
 
             if ($threshold === null) {
+                $reasonCounters['no_threshold']++;
+                if ($debug) {
+                    $this->line(sprintf(
+                        '[SKIP] user=%s reason=no_threshold used_percent=%.2f',
+                        (string) $user->email,
+                        $usedPercent
+                    ));
+                }
                 continue;
             }
 
             $cacheKey = sprintf('budget-alert:%s:%04d-%02d:%d', $user->id, $year, $month, $threshold);
 
-            if (Cache::has($cacheKey)) {
+            if (! $force && Cache::has($cacheKey)) {
+                $reasonCounters['cache_hit']++;
+                if ($debug) {
+                    $this->line(sprintf(
+                        '[SKIP] user=%s reason=cache_hit threshold=%d',
+                        (string) $user->email,
+                        $threshold
+                    ));
+                }
                 continue;
             }
 
@@ -70,10 +104,51 @@ class SendBudgetAlertsCommand extends Command
             if (($result['sent'] ?? 0) > 0) {
                 Cache::put($cacheKey, true, $periodEnd->copy()->endOfDay());
                 $sentCount++;
+                $reasonCounters['sent']++;
+
+                if ($debug) {
+                    $this->line(sprintf(
+                        '[SENT] user=%s threshold=%d sent=%d failed=%d skipped=%s',
+                        (string) $user->email,
+                        $threshold,
+                        (int) ($result['sent'] ?? 0),
+                        (int) ($result['failed'] ?? 0),
+                        ($result['skipped'] ?? false) ? 'true' : 'false'
+                    ));
+                }
+                continue;
+            }
+
+            if (($result['skipped'] ?? false) === true) {
+                $reasonCounters['skipped']++;
+                if ($debug) {
+                    $this->line(sprintf(
+                        '[SKIP] user=%s reason=push_skipped_by_preferences_or_tokens threshold=%d',
+                        (string) $user->email,
+                        $threshold
+                    ));
+                }
+                continue;
+            }
+
+            $reasonCounters['failed']++;
+
+            if ($debug) {
+                $this->line(sprintf(
+                    '[FAIL] user=%s threshold=%d sent=%d failed=%d',
+                    (string) $user->email,
+                    $threshold,
+                    (int) ($result['sent'] ?? 0),
+                    (int) ($result['failed'] ?? 0)
+                ));
             }
         }
 
         $this->info("Budget alerts sent: {$sentCount}");
+
+        if ($debug) {
+            $this->line('Budget alerts debug summary: '.json_encode($reasonCounters));
+        }
 
         return self::SUCCESS;
     }
