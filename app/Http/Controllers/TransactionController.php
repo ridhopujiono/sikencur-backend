@@ -13,6 +13,7 @@ use App\Models\ReceiptScan;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\UserBudget;
+use App\Services\BudgetAlertService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
@@ -263,7 +264,7 @@ class TransactionController extends Controller
         ]);
     }
 
-    public function store(StoreTransactionRequest $request): JsonResponse
+    public function store(StoreTransactionRequest $request, BudgetAlertService $budgetAlertService): JsonResponse
     {
         $transaction = DB::transaction(function () use ($request): Transaction {
             $transaction = Transaction::query()->create([
@@ -283,6 +284,8 @@ class TransactionController extends Controller
 
             return $transaction->load('items');
         });
+
+        $budgetAlertService->sendForTransaction($transaction);
 
         return response()->json($transaction, 201);
     }

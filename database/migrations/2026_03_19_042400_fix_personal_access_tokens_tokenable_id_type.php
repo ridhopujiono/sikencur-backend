@@ -12,6 +12,10 @@ return new class extends Migration
             return;
         }
 
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $column = DB::selectOne("SHOW COLUMNS FROM `personal_access_tokens` WHERE `Field` = 'tokenable_id'");
 
         if (! $column || ! isset($column->Type)) {

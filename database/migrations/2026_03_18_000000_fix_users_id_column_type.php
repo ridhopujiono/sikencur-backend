@@ -7,6 +7,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $column = DB::selectOne("SHOW COLUMNS FROM `users` WHERE `Field` = 'id'");
 
         if (! $column || ! isset($column->Type)) {
